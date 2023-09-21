@@ -1,0 +1,470 @@
+---
+title: "cell distance"
+output: html_document
+date: "2023-09-04"
+---
+
+
+
+```{r}
+
+library(dplyr)
+library(progress)
+library(ggplot2)
+```
+
+```{r}
+merged <- readRDS("/Users/hailey/Downloads/merfish/Merged_SVZ_Seurat_dims14_Labelled_GOOD.rds")
+merged_Cortex <- readRDS("/Users/hailey/Downloads/merfish/CC_FINAL_dims10Seurat_Annotated.rds")
+```
+
+
+```{r}
+get_sample_data <- function(data, sample) {
+  
+  meta <- data@meta.data[data@meta.data[["orig.ident"]] == sample, c("orig.ident", "CellType")]
+  
+  image <- paste0(sample, "_ALL")
+
+  coors <- data@images[[image]]@boundaries[["centroids"]]@coords
+  coordinates_df <- as.data.frame(coors)
+
+  cell_names = data@images[[image]]@boundaries[["centroids"]]@cells
+  rownames(coordinates_df) <- cell_names
+  
+  
+  meta$cell <- rownames(meta)
+  coordinates_df$cell <- rownames(coordinates_df)
+  
+  merged <- merge(meta, coordinates_df, by = "cell")
+  
+  return(merged)
+  
+}
+```
+
+
+```{r}
+
+# Function to calculate the distance between two points
+distance <- function(x1, y1, x2, y2) {
+  return(sqrt((x1 - x2)^2 + (y1 - y2)^2))
+}
+
+# Function to calculate average distance between two cell types
+average_distance <- function(data, type1, type2) {
+  cells_type1 <- data[data$CellType == type1, ]
+  cells_type2 <- data[data$CellType == type2, ]
+  
+  total_distance <- 0
+  count <- 0
+  
+  for(i in 1:nrow(cells_type1)) {
+    for(j in 1:nrow(cells_type2)) {
+      total_distance <- total_distance + distance(cells_type1$x[i], cells_type1$y[i], cells_type2$x[j], cells_type2$y[j])
+      count <- count + 1
+    }
+  }
+  return(total_distance / count)
+}
+
+# Function to shuffle celltype labels and calculate average distance 100 times
+expected_distance_and_zscore <- function(data, type1, type2, n=100) {
+  
+  distances <- numeric(n)
+  
+  for(i in 1:n) {
+    shuffled_data <- data
+    shuffled_data$CellType <- sample(data$CellType)
+    distances[i] <- average_distance(shuffled_data, type1, type2)
+  }
+  
+  observed_distance <- average_distance(data, type1, type2)
+  mean_shuffled <- mean(distances)
+  sd_shuffled <- sd(distances)
+  
+  z_score <- (observed_distance - mean_shuffled) / sd_shuffled
+  
+  p_value <- pnorm(z_score)
+  
+  return(list(observed_distance = observed_distance, mean_shuffled = mean_shuffled, sd_shuffled = sd_shuffled, z_score = z_score, p_value = p_value))
+}
+
+```
+
+```{r}
+
+comparison_all_celltype <- function (data) {
+  celltypes <- unique(data$CellType)
+  combinations <- combn(celltypes, 2)
+  results_list <- list()
+  number <- ncol(combinations)
+  pb <- progress_bar$new(total = number, format = "[:bar] :percent")
+
+  # Loop through each combination and apply the function
+  for (i in 1:ncol(combinations)) {
+    type1 <- combinations[1, i]
+    type2 <- combinations[2, i]
+
+    result <- expected_distance_and_zscore(data, type1, type2)
+    results_list[[paste(type1, type2, sep = ",")]] <- result
+    pb$tick()
+  }
+  
+  return (results_list)
+}
+
+
+```
+
+
+```{r}
+
+plot <- function(distance, cell_type) {
+  results <- distance
+  cell_types <- cell_type
+  num_cell_types <- length(cell_types)
+  
+  p_matrix <- matrix(NA, nrow = num_cell_types , ncol = num_cell_types, dimnames = list(cell_types, cell_types))
+  
+  for (key in names(results)) {
+  types <- unlist(strsplit(key, ","))
+  p_matrix[types[1], types[2]] <- results[[key]][["p_value"]]
+  p_matrix[types[2], types[1]] <- results[[key]][["p_value"]]  
+  }
+  
+  df <- as.data.frame(as.table(p_matrix))
+  
+  
+  df <- df %>%
+  rename(
+    CellType1 = Var1,
+    CellType2 = Var2,
+    p_val = Freq
+  )
+  
+  plot <- ggplot(df) +
+          geom_point(data = subset(df, p_val < 0.05), aes(x = CellType1, y = CellType2),  fill = "orange", color = "black", shape = 21, size = 4) +
+          geom_point(data = subset(df, p_val >= 0.05), aes(x = CellType1, y = CellType2), color = "black", shape = 4, size = 2) + 
+          theme_minimal() +
+          theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+          coord_fixed(ratio = 1) + # to ensure the same spacing in x and y direction
+          theme(panel.background = element_rect(fill = "white"))
+  
+  return (plot)
+  }
+
+
+```
+
+
+
+```{r}
+close_HX_not_NX <- function(HX, NX, celltypes) {
+  
+  celltypes <- celltypes
+  
+  all_combinations <- expand.grid(CellType1 = celltypes, CellType2 = celltypes)
+  
+
+  merged_tempHX <- merge(HX[[1]], HX[[2]], by = c("CellType1", "CellType2"))
+  merged_finalHX <- merge(merged_tempHX, HX[[3]], by = c("CellType1", "CellType2"))
+  merged_finalHX$pval_product <- merged_finalHX$p_val.x * merged_finalHX$p_val.y * merged_finalHX$p_val
+  
+  result_HX <- merged_finalHX[!is.na(merged_finalHX$pval_product) & merged_finalHX$pval_product < 0.05, c("CellType1", "CellType2", "pval_product")]
+ 
+  merged_tempNX <- merge(NX[[1]], NX[[2]], by = c("CellType1", "CellType2"))
+  merged_finalNX <- merge(merged_tempNX, NX[[3]], by = c("CellType1", "CellType2"))
+  merged_finalNX$pval_product <- merged_finalNX$p_val.x * merged_finalNX$p_val.y * merged_finalNX$p_val
+
+
+  result_NX <- merged_finalNX[!is.na(merged_finalHX$pval_product) & merged_finalNX$pval_product > 0.05, c("CellType1", "CellType2", "pval_product")]
+  
+  
+  NX_not_HX_close <- result_NX %>% inner_join(result_HX, by  = c("CellType1", "CellType2")) %>% select(CellType1, CellType2)
+  
+  all_combinations$pair_id <- paste(all_combinations$CellType1, all_combinations$CellType2, sep = "_")
+  NX_not_HX_close$pair_id <- paste(NX_not_HX_close$CellType1, NX_not_HX_close$CellType2, sep = "_")
+
+  all_combinations$present <- all_combinations$pair_id %in% NX_not_HX_close$pair_id
+  
+  plot <- ggplot(all_combinations, aes(x = CellType1, y = CellType2)) +
+          geom_point(aes(fill = present, shape = present), color = "black", size = 4) +
+          scale_fill_manual(values = c("white", "orange"), guide = "none") +
+          scale_shape_manual(values = c(`FALSE` = 4, `TRUE` = 21)) + 
+          theme_minimal() +
+          theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+          coord_fixed(ratio = 1) + 
+          theme(panel.background = element_rect(fill = "white")) +
+          scale_x_discrete(limits = celltypes) + 
+          scale_y_discrete(limits = celltypes)
+
+  return (plot)
+
+}
+```
+
+
+
+```{r}
+close_NX_not_HX <- function(HX, NX, celltypes) {
+  
+  celltypes <- celltypes
+  
+  all_combinations <- expand.grid(CellType1 = celltypes, CellType2 = celltypes)
+  
+  merged_tempHX <- merge(HX[[1]], HX[[2]], by = c("CellType1", "CellType2"))
+  merged_finalHX <- merge(merged_tempHX, HX[[3]], by = c("CellType1", "CellType2"))
+  merged_finalHX$pval_product <- merged_finalHX$p_val.x * merged_finalHX$p_val.y * merged_finalHX$p_val
+  
+  result_HX <- merged_finalHX[!is.na(merged_finalHX$pval_product) & merged_finalHX$pval_product > 0.05, c("CellType1", "CellType2", "pval_product")]
+ 
+  merged_tempNX <- merge(NX[[1]], NX[[2]], by = c("CellType1", "CellType2"))
+  merged_finalNX <- merge(merged_tempNX, NX[[3]], by = c("CellType1", "CellType2"))
+  merged_finalNX$pval_product <- merged_finalNX$p_val.x * merged_finalNX$p_val.y * merged_finalNX$p_val
+
+
+  result_NX <- merged_finalNX[!is.na(merged_finalNX$pval_product) & merged_finalNX$pval_product < 0.05, c("CellType1", "CellType2", "pval_product")]
+  
+  
+  HX_not_NX_close <- result_NX %>% inner_join(result_HX, by  = c("CellType1", "CellType2")) %>% select(CellType1, CellType2)
+  
+  all_combinations$pair_id <- paste(all_combinations$CellType1, all_combinations$CellType2, sep = "_")
+  
+  HX_not_NX_close$pair_id <- paste(HX_not_NX_close$CellType1, HX_not_NX_close$CellType2, sep = "_")
+
+  all_combinations$present <- all_combinations$pair_id %in% HX_not_NX_close$pair_id
+  
+    # Create the plot
+  plot <- ggplot(all_combinations, aes(x = CellType1, y = CellType2)) +
+          geom_point(aes(fill = present, shape = present), color = "black", size = 4) +
+          scale_fill_manual(values = c("white", "orange"), guide = "none") +
+          scale_shape_manual(values = c(`FALSE` = 4, `TRUE` = 21)) + 
+          theme_minimal() +
+          theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+          coord_fixed(ratio = 1) + 
+          theme(panel.background = element_rect(fill = "white")) +
+          scale_x_discrete(limits = celltypes) + 
+          scale_y_discrete(limits = celltypes)
+
+  
+  return (plot)
+  
+}
+```
+
+
+
+```{r}
+
+sample <-"HX1"
+
+HX1 <- get_sample_data(merged, sample)
+
+cell_types <- unique(HX1$CellType)
+
+HX1_distance <- comparison_all_celltype(HX1)
+
+HX1_result <- plot(HX1_distance, cell_types)
+
+HX1_result
+```
+
+
+```{r}
+sample <-"HX2"
+
+HX2 <- get_sample_data(merged, sample)
+
+cell_types <- unique(HX2$CellType)
+
+HX2_distance <- comparison_all_celltype(HX2)
+
+HX2_result <- plot(HX2_distance, cell_types)
+
+HX2_result
+```
+
+
+```{r}
+sample <-"HX3"
+
+HX3 <- get_sample_data(merged, sample)
+
+cell_types <- unique(HX3$CellType)
+
+HX3_distance <- comparison_all_celltype(HX3)
+
+HX3_result <- plot(HX3_distance, cell_types)
+
+HX3_result
+```
+
+
+
+```{r}
+sample <-"NX1"
+
+NX1 <- get_sample_data(merged, sample)
+
+cell_types <- unique(NX1$CellType)
+
+NX1_distance <- comparison_all_celltype(NX1)
+
+NX1_result <- plot(NX1_distance, cell_types)
+
+NX1_result
+```
+
+```{r}
+sample <-"NX2"
+
+NX2 <- get_sample_data(merged, sample)
+
+cell_types <- unique(NX2$CellType)
+
+NX2_distance <- comparison_all_celltype(NX2)
+
+NX2_result <- plot(NX2_distance, cell_types)
+
+NX2_result
+```
+
+
+```{r}
+sample <-"NX3"
+
+NX3 <- get_sample_data(merged, sample)
+
+cell_types <- unique(NX3$CellType)
+
+NX3_distance <- comparison_all_celltype(NX3)
+
+NX3_result <- plot(NX3_distance, cell_types)
+
+NX3_result
+```
+
+
+```{r}
+celltypes <- unique(HX1$CellType)
+
+HX <- list(HX1_result[['data']], HX2_result[['data']], HX3_result[['data']])
+NX <- list(NX1_result[['data']], NX2_result[['data']], NX3_result[['data']])
+HX_close_HX <- close_HX_not_NX(HX, NX, celltypes)
+HX_close_NX <- close_NX_not_HX(HX, NX, celltypes)
+
+HX_close_HX
+HX_close_NX
+
+```
+
+
+
+CC
+
+```{r}
+sample <-"NX1"
+
+NX1_CC <- get_sample_data(merged_Cortex, sample)
+
+cell_types <- unique(NX1_CC$CellType)
+
+NX1_CC_distance <- comparison_all_celltype(NX1_CC)
+
+NX1_CC_result <- plot(NX1_CC_distance, cell_types)
+
+NX1_CC_result
+```
+
+
+
+```{r}
+sample <-"NX2"
+
+NX2_CC <- get_sample_data(merged_Cortex, sample)
+
+cell_types <- unique(NX2_CC$CellType)
+
+NX2_CC_distance <- comparison_all_celltype(NX2_CC)
+
+NX2_CC_result <- plot(NX2_CC_distance, cell_types)
+
+NX2_CC_result
+```
+
+
+
+
+```{r}
+sample <-"NX3"
+
+NX3_CC <- get_sample_data(merged_Cortex, sample)
+
+cell_types <- unique(NX3_CC$CellType)
+
+NX3_CC_distance <- comparison_all_celltype(NX3_CC)
+
+NX3_CC_result <- plot(NX3_CC_distance, cell_types)
+
+NX3_CC_result
+```
+
+```{r}
+sample <-"HX1"
+
+HX1_CC <- get_sample_data(merged_Cortex, sample)
+
+cell_types <- unique(HX1_CC$CellType)
+
+HX1_CC_distance <- comparison_all_celltype(HX1_CC)
+
+HX1_CC_result <- plot(HX1_CC_distance, cell_types)
+
+HX1_CC_result
+```
+
+
+
+```{r}
+sample <-"HX2"
+
+HX2_CC <- get_sample_data(merged_Cortex, sample)
+
+cell_types <- unique(HX2_CC$CellType)
+
+HX2_CC_distance <- comparison_all_celltype(HX2_CC)
+
+HX2_CC_result <- plot(HX2_CC_distance, cell_types)
+
+HX2_CC_result
+```
+
+
+```{r}
+sample <-"HX3"
+
+HX3_CC <- get_sample_data(merged_Cortex, sample)
+
+cell_types <- unique(HX3_CC$CellType)
+
+HX3_CC_distance <- comparison_all_celltype(HX3_CC)
+
+HX3_CC_result <- plot(HX3_CC_distance, cell_types)
+
+HX3_CC_result
+```
+
+```{r}
+celltypes <- unique(HX1_CC$CellType)
+HX_CC <- list(HX1_CC_result[['data']], HX2_CC_result[['data']], HX3_CC_result[['data']])
+NX_CC <- list(NX1_CC_result[['data']], NX2_CC_result[['data']], NX3_CC_result[['data']])
+HX_close_HX_cc <- close_HX_not_NX(HX_CC, NX_CC, celltypes)
+HX_close_NX_cc <- close_NX_not_HX(HX_CC, NX_CC, celltypes)
+HX_close_HX_cc
+HX_close_NX_cc
+```
+
+
+
+

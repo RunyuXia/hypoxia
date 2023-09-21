@@ -1,0 +1,581 @@
+---
+title: "CellChatDB"
+output:
+  pdf_document: default
+  html_document: default
+date: "2023-08-15"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+library(CellChat)
+library(patchwork)
+library(Seurat)
+options(stringsAsFactors = FALSE)
+```
+
+```{r}
+library(future.apply)
+future.seed <- TRUE
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r, echo=FALSE}
+merged <- readRDS("/Users/hailey/Downloads/merfish/Merged_SVZ_Seurat_dims14_Labelled_GOOD.rds")
+
+```
+
+
+```{r, echo=FALSE}
+data.input <- GetAssayData(merged, assay = "SCT", slot = "data")
+meta = merged@meta.data
+```
+
+```{r}
+meta_HX <- meta[merged@meta.data[["Condition"]] == "HX",]
+meta_NX <- meta[merged@meta.data[["Condition"]] == "NX",]
+```
+
+
+```{r}
+cell_type_counts <- table(meta_NX$CellType)
+cell_type_counts
+cell_type_counts2 <- table(meta_HX$CellType)
+cell_type_counts2
+
+astrocyte_NX <- rownames(meta_NX[meta_NX$CellType == "Astrocyte", ])
+sampled_astrocyte_NX <- sample(astrocyte_NX, 692)
+
+CP_NX <- rownames(meta_NX[meta_NX$CellType == "Choroid Plexus", ])
+sampled_CP_NX <- sample(CP_NX, 40)
+
+EP_NX <- rownames(meta_NX[meta_NX$CellType == "Ependymal", ])
+sampled_EP_NX <- sample(EP_NX, 1105)
+
+IM_NX <- rownames(meta_NX[meta_NX$CellType == "Immune", ])
+sampled_IM_NX <- sample(IM_NX, 168)
+
+IT_NX <- rownames(meta_NX[meta_NX$CellType == "Interneuron", ])
+
+NB_NX <- rownames(meta_NX[meta_NX$CellType == "Neuroblast", ])
+
+NBOB_NX <- rownames(meta_NX[meta_NX$CellType == "Neuroblast - OB", ])
+
+NSC_dorsal_NX <- rownames(meta_NX[meta_NX$CellType == "NSC - dorsal", ])
+
+NSC_septal_NX <- rownames(meta_NX[meta_NX$CellType == "NSC - septal", ])
+
+NSC_ventral_NX <- rownames(meta_NX[meta_NX$CellType == "NSC - ventral", ])
+
+OL_NX <- rownames(meta_NX[meta_NX$CellType == "OL", ])
+sampled_OL_NX <- sample(OL_NX, 384)
+
+OL_myelinating_NX <- rownames(meta_NX[meta_NX$CellType == "OL - myelinating", ])
+sampled_OL_myelinating_NX <- sample(OL_myelinating_NX, 49)
+
+OPC_NX <- rownames(meta_NX[meta_NX$CellType == "OPC", ])
+sampled_OPC_NX <- sample(OPC_NX, 125)
+
+TAP_NX <- rownames(meta_NX[meta_NX$CellType == "TAP", ])
+
+Vascular_NX <- rownames(meta_NX[meta_NX$CellType == "Vascular", ])
+sampled_vascular <- sample(Vascular_NX, 207)
+
+combined_NX <- c(sampled_astrocyte_NX, sampled_CP_NX, sampled_EP_NX, sampled_IM_NX, IT_NX, NB_NX, NBOB_NX, NSC_dorsal_NX,
+                 NSC_septal_NX, NSC_ventral_NX, sampled_OL_NX, sampled_OL_myelinating_NX, sampled_OPC_NX, TAP_NX, 
+                 sampled_vascular)
+
+```
+
+
+```{r}
+
+astrocyte_HX <- rownames(meta_HX[meta_HX$CellType == "Astrocyte", ])
+
+
+CP_HX <- rownames(meta_HX[meta_HX$CellType == "Choroid Plexus", ])
+
+
+EP_HX <- rownames(meta_HX[meta_HX$CellType == "Ependymal", ])
+
+
+IM_HX <- rownames(meta_HX[meta_HX$CellType == "Immune", ])
+
+
+IT_HX <- rownames(meta_HX[meta_HX$CellType == "Interneuron", ])
+sampled_IT_HX <- sample(IT_HX, 197)
+
+NB_HX <- rownames(meta_HX[meta_HX$CellType == "Neuroblast", ])
+sampled_NB_HX <- sample(NB_HX, 554)
+
+NBOB_HX <- rownames(meta_HX[meta_HX$CellType == "Neuroblast - OB", ])
+sampled_NBOB_HX <- sample(NBOB_HX, 858)
+
+NSC_dorsal_HX <- rownames(meta_HX[meta_HX$CellType == "NSC - dorsal", ])
+sampled_NSC_dorsal_HX <- sample(NSC_dorsal_HX, 355)
+
+NSC_septal_HX <- rownames(meta_HX[meta_HX$CellType == "NSC - septal", ])
+sampled_NSC_septal_HX <- sample(NSC_septal_HX, 266)
+
+NSC_ventral_HX <- rownames(meta_HX[meta_HX$CellType == "NSC - ventral", ])
+sampled_NSC_ventral_HX <- sample(NSC_ventral_HX, 429)
+
+OL_HX <- rownames(meta_HX[meta_HX$CellType == "OL", ])
+
+OL_myelinating_HX <- rownames(meta_HX[meta_HX$CellType == "OL - myelinating", ])
+
+
+OPC_HX <- rownames(meta_HX[meta_HX$CellType == "OPC", ])
+
+
+TAP_HX <- rownames(meta_HX[meta_HX$CellType == "TAP", ])
+sampled_TAP_HX <- sample(TAP_HX, 417)
+
+Vascular_HX <- rownames(meta_HX[meta_HX$CellType == "Vascular", ])
+
+
+combined_HX <- c(astrocyte_HX, CP_HX, EP_HX, IM_HX, sampled_IT_HX, sampled_NB_HX, sampled_NBOB_HX,sampled_NSC_dorsal_HX,sampled_NSC_septal_HX, sampled_NSC_ventral_HX, OL_HX, OL_myelinating_HX, OPC_HX, sampled_TAP_HX, Vascular_HX)
+
+
+
+```
+
+
+
+
+
+```{r}
+cell.HX = rownames(meta_HX)
+cell.NX = rownames(meta_NX)
+
+#HX_meta_processed = meta_HX[cell.HX, ]
+#NX_meta_processed = meta_NX[cell.NX, ]
+
+HX_count = data.input[, cell.HX]
+NX_count = data.input[, cell.NX]
+
+cellchat.HX <- createCellChat(object = HX_count, meta = meta_HX, group.by = "CellType")
+cellchat.NX <- createCellChat(object = NX_count, meta = meta_NX, group.by = "CellType")
+```
+
+```{r}
+cellchat.HX <- addMeta(cellchat.HX, meta = meta_HX)
+cellchat.HX <- setIdent(cellchat.HX, ident.use = "CellType") 
+levels(cellchat.HX@idents) # show factor levels of the cell labels
+groupSize <- as.numeric(table(cellchat.HX@idents)) # number of cells in each cell group
+groupSize
+```
+
+
+
+```{r}
+cellchat.NX <- addMeta(cellchat.NX, meta = meta_NX)
+cellchat.NX <- setIdent(cellchat.NX, ident.use = "CellType") 
+levels(cellchat.NX@idents) # show factor levels of the cell labels
+groupSize <- as.numeric(table(cellchat.NX@idents)) # number of cells in each cell group
+groupSize
+```
+
+
+```{r}
+CellChatDB <- CellChatDB.mouse # use CellChatDB.mouse if running on mouse data
+showDatabaseCategory(CellChatDB)
+```
+
+
+
+
+```{r}
+dplyr::glimpse(CellChatDB$interaction)
+```
+
+
+
+```{r}
+CellChatDB.use <- CellChatDB
+```
+
+
+```{r}
+which(CellChatDB.use[["interaction"]]$ligand == "H2-BI") # 1887
+CellChatDB.use[["interaction"]] <- CellChatDB.use[["interaction"]][-1887,]
+which(CellChatDB.use[["interaction"]]$ligand == "H2-Ea-ps") #1900
+CellChatDB.use[["interaction"]] <- CellChatDB.use[["interaction"]][-1900,]
+```
+
+
+```{r}
+cellchat.HX@DB <- CellChatDB.use
+cellchat.NX@DB <- CellChatDB.use
+```
+
+
+```{r}
+cellchat.HX <- subsetData(cellchat.HX) 
+cellchat.NX <- subsetData(cellchat.NX) 
+# subset the expression data of signaling genes for saving computation cost
+# This step is necessary even if using the whole database
+future::plan("multisession", workers = 4) # do parallel
+#> Warning: Strategy 'multiprocess' is deprecated in future (>= 1.20.0). Instead,
+#> explicitly specify either 'multisession' or 'multicore'. In the current R
+#> session, 'multiprocess' equals 'multisession'.
+#> Warning in supportsMulticoreAndRStudio(...): [ONE-TIME WARNING] Forked
+#> processing ('multicore') is not supported when running R from RStudio
+#> because it is considered unstable. For more details, how to control forked
+#> processing or not, and how to silence this warning in future R sessions, see ?
+#> parallelly::supportsMulticore
+cellchat.HX <- identifyOverExpressedGenes(cellchat.HX)
+cellchat.NX <- identifyOverExpressedGenes(cellchat.NX)
+cellchat.HX <- identifyOverExpressedInteractions(cellchat.HX)
+cellchat.NX <- identifyOverExpressedInteractions(cellchat.NX)
+
+# project gene expression data onto PPI (Optional: when running it, USER should set `raw.use = FALSE` in the function `computeCommunProb()` in order to use the projected data)
+# cellchat <- projectData(cellchat, PPI.human)
+```
+
+
+```{r}
+cellchat.HX <- computeCommunProb(cellchat.HX, )
+# Filter out the cell-cell communication if there are only few number of cells in certain cell groups
+cellchat.HX <- filterCommunication(cellchat.HX, min.cells = 10)
+
+#Compute the communication probability
+cellchat.HX <- computeCommunProbPathway(cellchat.HX)
+cellchat.HX <- aggregateNet(cellchat.HX)
+
+#Compute and visualize the network centrality scores
+cellchat.HX <- netAnalysis_computeCentrality(cellchat.HX, slot.name = "netP")
+```
+
+
+```{r}
+cellchat.NX <- computeCommunProb(cellchat.NX, )
+# Filter out the cell-cell communication if there are only few number of cells in certain cell groups
+cellchat.NX <- filterCommunication(cellchat.NX, min.cells = 10)
+
+#Compute the communication probability
+cellchat.NX <- computeCommunProbPathway(cellchat.NX)
+cellchat.NX <- aggregateNet(cellchat.NX)
+
+#Compute and visualize the network centrality scores
+cellchat.NX <- netAnalysis_computeCentrality(cellchat.NX, slot.name = "netP")
+```
+
+```{r}
+groupSize <- as.numeric(table(cellchat.HX@idents))
+par(mfrow = c(1,2), xpd=TRUE)
+netVisual_circle(cellchat.HX@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Number of interactions")
+netVisual_circle(cellchat.HX@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Interaction weights/strength")
+```
+
+```{r}
+groupSize <- as.numeric(table(cellchat.NX@idents))
+par(mfrow = c(1,2), xpd=TRUE)
+netVisual_circle(cellchat.NX@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Number of interactions")
+netVisual_circle(cellchat.NX@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Interaction weights/strength")
+```
+
+```{r}
+object.list <- list(NX = cellchat.NX, HX = cellchat.HX)
+```
+
+
+```{r}
+cellchat_merge <- mergeCellChat(object.list, add.names = names(object.list))
+```
+
+
+Differential Analysis
+
+Whether the cell-cell communication is enhanced or not
+
+The interaction between which cell types is significantly changed
+
+How the major sources and targets change from one condition to another
+
+
+
+
+```{r}
+#Comparison of  the total number of interactions and interaction strength of the inferred cell-cell communication networks from different biological conditions.
+gg1 <- compareInteractions(cellchat_merge, show.legend = F, group = c(1,2))
+gg2 <- compareInteractions(cellchat_merge, show.legend = F, group = c(1,2), measure = "weight")
+gg1 + gg2
+
+#HX has more cells compared to NX?
+```
+
+
+The differential number of interactions or interaction strength in the cell-cell communication network between two datasets can be visualized using circle plot, where red (or blue) colored edges represent increased (or decreased) signaling in the second dataset compared to the first one.
+
+
+```{r}
+par(mfrow = c(1,2), xpd=TRUE)
+netVisual_diffInteraction(cellchat_merge, weight.scale = T)
+netVisual_diffInteraction(cellchat_merge, weight.scale = T, measure = "weight")
+```
+
+
+```{r}
+gg1 <- netVisual_heatmap(cellchat_merge)
+#> Do heatmap based on a merged object
+gg2 <- netVisual_heatmap(cellchat_merge, measure = "weight")
+#> Do heatmap based on a merged object
+gg1 + gg2
+```
+
+Compute the maximum number of cells per cell group and the maximum number of interactions (or interaction weights) across all datasets.
+
+```{r}
+weight.max <- getMaxWeight(object.list, attribute = c("idents","count"))
+par(mfrow = c(1,2), xpd=TRUE)
+for (i in 1:length(object.list)) {
+  netVisual_circle(object.list[[i]]@net$count, weight.scale = T, label.edge= F, edge.weight.max = weight.max[2], edge.width.max = 12, title.name = paste0("Number of interactions - ", names(object.list)[i]))
+}
+```
+
+
+```{r}
+num.link <- sapply(object.list, function(x) {rowSums(x@net$count) + colSums(x@net$count)-diag(x@net$count)})
+weight.MinMax <- c(min(num.link), max(num.link)) # control the dot size in the different datasets
+gg <- list()
+for (i in 1:length(object.list)) {
+  gg[[i]] <- netAnalysis_signalingRole_scatter(object.list[[i]], title = names(object.list)[i], weight.MinMax = weight.MinMax)
+  gg[[i]] <- gg[[i]] + ylim(0, 1)
+}
+#> Signaling role analysis on the aggregated cell-cell communication network from all signaling pathwaysq
+#> Signaling role analysis on the aggregated cell-cell communication network from all signaling pathways
+patchwork::wrap_plots(plots = gg)
+```
+#TAP
+#OL
+# identify the specific signaling changes of certain cell types between NL and LS
+```{r}
+gg1 <- netAnalysis_signalingChanges_scatter(cellchat_merge, idents.use = "TAP")
+
+#> The following `from` values were not present in `x`: 0
+#> The following `from` values were not present in `x`: 0, -1
+gg2 <- netAnalysis_signalingChanges_scatter(cellchat_merge, idents.use = "Vascular")
+
+
+gg3 <- netAnalysis_signalingChanges_scatter(cellchat_merge, idents.use = "Immune")
+
+
+gg4 <- netAnalysis_signalingChanges_scatter(cellchat_merge, idents.use = "Ependymal")
+
+
+gg5 <- netAnalysis_signalingChanges_scatter(cellchat_merge, idents.use = "Interneuron")
+
+
+gg6 <- netAnalysis_signalingChanges_scatter(cellchat_merge, idents.use = "Neuroblast - OB")
+
+
+gg7 <- netAnalysis_signalingChanges_scatter(cellchat_merge, idents.use = "NSC - dorsal")
+
+
+gg8 <- netAnalysis_signalingChanges_scatter(cellchat_merge, idents.use = "NSC - ventral")
+
+
+gg9 <- netAnalysis_signalingChanges_scatter(cellchat_merge, idents.use = "NSC - septal")
+
+gg1
+gg2
+gg3
+gg4
+gg5
+gg6
+gg7
+gg8
+gg9
+
+#patchwork::wrap_plots(plots = list(gg1,gg2))
+```
+
+Comparing the information flow for each signaling pathway, which is defined by the sum of communication probability among all pairs of cell groups in the inferred network (i.e., the total weights in the network).
+
+Significant signaling pathways were ranked based on differences in the overall information flow within the inferred networks between HX and NX. The top signaling pathways colored red are enriched in NX skin, and these colored green were enriched in the HX skin.
+
+```{r}
+gg1 <- rankNet(cellchat_merge, mode = "comparison", stacked = T, do.stat = TRUE)
+gg2 <- rankNet(cellchat_merge, mode = "comparison", stacked = F, do.stat = TRUE)
+gg1 + gg2
+```
+
+
+compare the outgoing (or incoming) signaling pattern between two datasets, allowing to identify signaling pathways/ligand-receptors that exhibit different signaling patterns.
+
+```{r}
+library(ComplexHeatmap)
+i = 1
+# combining all the identified signaling pathways from different datasets 
+pathway.union <- union(object.list[[i]]@netP$pathways, object.list[[i+1]]@netP$pathways)
+ht1 = netAnalysis_signalingRole_heatmap(object.list[[i]], pattern = "outgoing", signaling = pathway.union, title = names(object.list)[i], width = 5, height = 6)
+ht2 = netAnalysis_signalingRole_heatmap(object.list[[i+1]], pattern = "outgoing", signaling = pathway.union, title = names(object.list)[i+1], width = 5, height = 6)
+draw(ht1 + ht2, ht_gap = unit(0.5, "cm"))
+```
+```{r}
+ht1 = netAnalysis_signalingRole_heatmap(object.list[[i]], pattern = "incoming", signaling = pathway.union, title = names(object.list)[i], width = 5, height = 6, color.heatmap = "GnBu")
+ht2 = netAnalysis_signalingRole_heatmap(object.list[[i+1]], pattern = "incoming", signaling = pathway.union, title = names(object.list)[i+1], width = 5, height = 6, color.heatmap = "GnBu")
+draw(ht1 + ht2, ht_gap = unit(0.5, "cm"))
+```
+
+
+
+```{r}
+ht1 = netAnalysis_signalingRole_heatmap(object.list[[i]], pattern = "all", signaling = pathway.union, title = names(object.list)[i], width = 5, height = 6, color.heatmap = "OrRd")
+ht2 = netAnalysis_signalingRole_heatmap(object.list[[i+1]], pattern = "all", signaling = pathway.union, title = names(object.list)[i+1], width = 5, height = 6, color.heatmap = "OrRd")
+draw(ht1 + ht2, ht_gap = unit(0.5, "cm"))
+```
+
+
+
+
+Part III: Identify the upgulated and down-regulated signaling ligand-receptor pairs
+
+Identify dysfunctional signaling by comparing the communication probabities
+Compare the communication probabilities mediated by ligand-receptor pairs from some cell groups to other cell groups.
+
+```{r}
+netVisual_bubble(cellchat_merge, comparison = c(1, 2), sources.use = c(1:15), angle.x = 90)
+gg1 <- netVisual_bubble(cellchat_merge, comparison = c(2, 1), max.dataset = 2, title.name = "Increased signaling in HX", angle.x = 45, remove.isolate = T)
+gg2 <- netVisual_bubble(cellchat_merge, comparison = c(2, 1), max.dataset = 1, title.name = "Decreased signaling in HX", angle.x = 45, remove.isolate = T)
+gg1 
+gg2
+
+```
+Identify the upgulated and down-regulated signaling ligand-receptor pairs based on the differential gene expression analysis. Specifically, we perform differential expression analysis between two biological conditions for each cell group, and then obtain the upgulated and down-regulated signaling based on the fold change of ligands in the sender cells and receptors in the receiver cells
+ 
+```{r}
+pos.dataset = "HX"
+features.name = pos.dataset
+cellchat_merge <- identifyOverExpressedGenes(cellchat_merge, group.dataset = "datasets", pos.dataset = pos.dataset, features.name = features.name, only.pos = FALSE, thresh.pc = 0.1, thresh.fc = 0.1, thresh.p = 1)
+net <- netMappingDEG(cellchat_merge, features.name = features.name)
+net.up <- subsetCommunication(cellchat_merge, net = net, datasets = "HX",ligand.logFC = 0.5, receptor.logFC = NULL)
+
+#No significant signaling interactions inferred
+
+#net.down <- subsetCommunication(cellchat_merge, net = net, datasets = "NX",ligand.logFC = -0.1, receptor.logFC = -0.1)
+
+gene.up <- extractGeneSubsetFromPair(net.up, cellchat_merge)
+
+#gene.down <- extractGeneSubsetFromPair(net.down, cellchat_merge)
+```
+
+Visualize the upgulated and down-regulated signaling ligand-receptor pairs using bubble plot or chord diagram.
+```{r}
+
+#bubble plot
+pairLR.use.up = net.up[, "interaction_name", drop = F]
+gg1 <- netVisual_bubble(cellchat_merge, pairLR.use = pairLR.use.up, comparison = c(1, 2),  angle.x = 90, remove.isolate = T,title.name = paste0("Up-regulated signaling in ", names(object.list)[2]))
+#pairLR.use.down = net.down[, "interaction_name", drop = F]
+#gg2 <- netVisual_bubble(cellchat_merge, pairLR.use = pairLR.use.down, comparison = c(1, 2),  angle.x = 90, remove.isolate = T,title.name = paste0("Down-regulated signaling in ", names(object.list)[2]))
+gg1 
+#gg2
+
+ggsave(filename = "HX_upregulation.png", plot = gg1, width = 25, height = 10)
+#Can specify source and target
+
+```
+
+```{r}
+
+netVisual_bubble(cellchat_merge, pairLR.use = pairLR.use.up, sources.use = 1, targets.use = c(1:15), comparison = c(1, 2),  angle.x = 90, remove.isolate = T,title.name = paste0("Up-regulated signaling in ", names(object.list)[2]))
+netVisual_bubble(cellchat_merge, pairLR.use = pairLR.use.up, sources.use = 2, targets.use = c(1:15), comparison = c(1, 2),  angle.x = 90, remove.isolate = T,title.name = paste0("Up-regulated signaling in ", names(object.list)[2]))
+netVisual_bubble(cellchat_merge, pairLR.use = pairLR.use.up, sources.use = 3, targets.use = c(1:15), comparison = c(1, 2),  angle.x = 90, remove.isolate = T,title.name = paste0("Up-regulated signaling in ", names(object.list)[2]))
+netVisual_bubble(cellchat_merge, pairLR.use = pairLR.use.up, sources.use = 4, targets.use = c(1:15), comparison = c(1, 2),  angle.x = 90, remove.isolate = T,title.name = paste0("Up-regulated signaling in ", names(object.list)[2]))
+netVisual_bubble(cellchat_merge, pairLR.use = pairLR.use.up, sources.use = 5, targets.use = c(1:15), comparison = c(1, 2),  angle.x = 90, remove.isolate = T,title.name = paste0("Up-regulated signaling in ", names(object.list)[2]))
+
+netVisual_bubble(cellchat_merge, pairLR.use = pairLR.use.up, sources.use = 7, targets.use = c(1:15), comparison = c(1, 2),  angle.x = 90, remove.isolate = T,title.name = paste0("Up-regulated signaling in ", names(object.list)[2]))
+netVisual_bubble(cellchat_merge, pairLR.use = pairLR.use.up, sources.use = 8, targets.use = c(1:15), comparison = c(1, 2),  angle.x = 90, remove.isolate = T,title.name = paste0("Up-regulated signaling in ", names(object.list)[2]))
+netVisual_bubble(cellchat_merge, pairLR.use = pairLR.use.up, sources.use = 9, targets.use = c(1:15), comparison = c(1, 2),  angle.x = 90, remove.isolate = T,title.name = paste0("Up-regulated signaling in ", names(object.list)[2]))
+netVisual_bubble(cellchat_merge, pairLR.use = pairLR.use.up, sources.use = 10, targets.use = c(1:15), comparison = c(1, 2),  angle.x = 90, remove.isolate = T,title.name = paste0("Up-regulated signaling in ", names(object.list)[2]))
+
+#netVisual_bubble(cellchat_merge, pairLR.use = pairLR.use.up, sources.use = 14, targets.use = c(1:15), comparison = c(1, 2),  angle.x = 90, remove.isolate = T,title.name = paste0("Up-regulated signaling in ", names(object.list)[2]))
+netVisual_bubble(cellchat_merge, pairLR.use = pairLR.use.up, sources.use = 15, targets.use = c(1:15), comparison = c(1, 2),  angle.x = 90, remove.isolate = T,title.name = paste0("Up-regulated signaling in ", names(object.list)[2]))
+
+```
+
+
+
+
+
+```{r}
+# visualize the enriched ligands in the second condition
+computeEnrichmentScore(net.up, species = 'mouse')
+```
+
+
+
+
+Part IV: Visually compare cell-cell communication using HeatMap
+
+
+```{r}
+
+#Visualize cell cell communication for each signaling pathway
+ht <- list()
+
+#for NX
+for (i in 1:length(cellchat_merge@netP[["NX"]][["pathways"]])) {
+  ht[[i]] <- netVisual_heatmap(object.list[[1]], signaling = cellchat_merge@netP[["NX"]][["pathways"]][i], color.heatmap = "Reds",title.name = paste(cellchat_merge@netP[["NX"]][["pathways"]][i], "signaling ",names(object.list)[1]))
+  ComplexHeatmap::draw(ht[[i]], ht_gap = unit(0.5, "cm"))
+}
+```
+
+
+Visualize cell cell communication for each signaling pathway
+```{r}
+ht <- list()
+
+#for HX
+for (i in 1:length(cellchat_merge@netP[["HX"]][["pathways"]])) {
+  ht[[i]] <- netVisual_heatmap(object.list[[2]], signaling = cellchat_merge@netP[["HX"]][["pathways"]][i], color.heatmap = "Reds",title.name = paste(cellchat_merge@netP[["HX"]][["pathways"]][i], "signaling ",names(object.list)[2]))
+  ComplexHeatmap::draw(ht[[i]], ht_gap = unit(0.5, "cm"))
+}
+```
+
+
+Compare the signaling gene expression distribution between Condition and "CTL"
+```{r}
+
+cellchat_merge@meta$datasets = factor(cellchat_merge@meta$datasets, levels = c("NX", "HX")) # set factor level
+
+plotGeneExpression(cellchat_merge, signaling = "GAS", split.by = "datasets", colors.ggplot = T)
+plotGeneExpression(cellchat_merge, signaling = "WNT", split.by = "datasets", colors.ggplot = T)
+plotGeneExpression(cellchat_merge, signaling = "CSF", split.by = "datasets", colors.ggplot = T)
+plotGeneExpression(cellchat_merge, signaling = "SEMA6", split.by = "datasets", colors.ggplot = T)
+plotGeneExpression(cellchat_merge, signaling = "CXCL", split.by = "datasets", colors.ggplot = T)
+plotGeneExpression(cellchat_merge, signaling = "EGF", split.by = "datasets", colors.ggplot = T)
+plotGeneExpression(cellchat_merge, signaling = "NOTCH", split.by = "datasets", colors.ggplot = T)
+```
+
+
+
+#Save the merged CellChat object
+saveRDS(cellchat, file = "cellchat_comparisonAnalysis_"CTL"_vs_Condition.rds")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
